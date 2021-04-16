@@ -25,7 +25,7 @@ func TestCommon(t *testing.T) {
 	log.FatalIfError(err)
 
 	cfg := NewHistogramConfig().WithName("test")
-	p := NewHistogramProcessor(*cfg).SetInterceptor(&handler{})
+	p := NewHistogramProcessor(*cfg).WithInterceptor(&handler{})
 
 	log.FatalIfError(p.ReadFromStream(metrics))
 

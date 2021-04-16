@@ -51,7 +51,7 @@ func (s *Processor) ReadFromStream(r io.Reader) error {
 }
 
 // specify metric handler for every incoming metric
-func (s *Processor) SetInterceptor(handler MetricInterceptor) *Processor {
+func (s *Processor) WithInterceptor(handler MetricInterceptor) *Processor {
 	s.interceptor = handler
 	return s
 }
