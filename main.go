@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -34,9 +33,10 @@ func main() {
 func MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	cfg := processor.NewHistogramConfig().WithName("test")
 	bulk := processor.NewHistogramProcessor(*cfg)
-	if err := bulk.AppendFromStream(r.Body); err != nil {
+	if err := bulk.ReadFromStream(r.Body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Fprintf(w, "OK")
+	bulk.Process(w)
+	// fmt.Fprintf(w, "OK")
 }

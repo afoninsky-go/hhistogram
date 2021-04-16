@@ -10,10 +10,15 @@ import (
 	"github.com/afoninsky-go/hhistogram/metric"
 )
 
+type MetricInterceptor interface {
+	OnMetric(*metric.Metric) error
+}
+
 type Processor struct {
 	sync.Mutex
-	cfg     Config
-	buckets map[time.Time][]metric.Metric
+	cfg         Config
+	buckets     map[time.Time][]metric.Metric
+	interceptor MetricInterceptor
 }
 
 func NewHistogramProcessor(cfg Config) *Processor {
@@ -24,7 +29,7 @@ func NewHistogramProcessor(cfg Config) *Processor {
 }
 
 // reads metrics in json format from the stream
-func (s *Processor) AppendFromStream(r io.Reader) error {
+func (s *Processor) ReadFromStream(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		var m metric.Metric
@@ -34,22 +39,21 @@ func (s *Processor) AppendFromStream(r io.Reader) error {
 		for _, m1 := range m.Slice() {
 			// create metric with one dimension and redefine its name
 			m1.SetName(s.cfg.Name)
-			s.PushToBucket(m1)
+			if s.interceptor != nil {
+				if err := s.interceptor.OnMetric(&m1); err != nil {
+					return err
+				}
+			}
+			s.pushToBucket(m1)
 		}
 	}
 	return scanner.Err()
 }
 
-// places metrics based on their timestamps to a specific bucket
-func (s *Processor) PushToBucket(m metric.Metric) {
-	s.Lock()
-	defer s.Unlock()
-	timestamp := time.Unix(0, m.Timestamps[0]*int64(time.Millisecond))
-	upperBorder := timestamp.Truncate(s.cfg.SliceDuration).Add(s.cfg.SliceDuration)
-	if _, ok := s.buckets[upperBorder]; !ok {
-		s.buckets[upperBorder] = []metric.Metric{}
-	}
-	s.buckets[upperBorder] = append(s.buckets[upperBorder], m)
+// specify metric handler for every incoming metric
+func (s *Processor) SetInterceptor(handler MetricInterceptor) *Processor {
+	s.interceptor = handler
+	return s
 }
 
 // creates metrics related to histograms based on buckets
@@ -69,4 +73,16 @@ func (s *Processor) Process(w io.Writer) {
 		// read resulting metrics
 		storage.WritePrometheus(w)
 	}
+}
+
+// places metrics based on their timestamps to a specific bucket
+func (s *Processor) pushToBucket(m metric.Metric) {
+	s.Lock()
+	defer s.Unlock()
+	timestamp := time.Unix(0, m.Timestamps[0]*int64(time.Millisecond))
+	upperBorder := timestamp.Truncate(s.cfg.SliceDuration).Add(s.cfg.SliceDuration)
+	if _, ok := s.buckets[upperBorder]; !ok {
+		s.buckets[upperBorder] = []metric.Metric{}
+	}
+	s.buckets[upperBorder] = append(s.buckets[upperBorder], m)
 }
