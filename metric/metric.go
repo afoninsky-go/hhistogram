@@ -1,4 +1,4 @@
-package processor
+package metric
 
 import (
 	"encoding/json"
@@ -15,30 +15,44 @@ type Metric struct {
 	// milliseconds from unix epoch
 	Timestamps []int64 `timestamps:"timestamps"`
 
-	Name      string `json:"-"`
-	Validated bool   `json:"-"`
+	name      string
+	validated bool
+}
+
+type rawMetric struct {
+	Labels map[string]string `json:"metric"`
+	Values []float64         `json:"values"`
+	// milliseconds from unix epoch
+	Timestamps []int64 `timestamps:"timestamps"`
 }
 
 // create metric from JSON representation:
 // {"metric":{"__name__":"requests_total","instance":"localhost","port":"9090"},"values":[123],"timestamps":[1598089314604]}
 func (s *Metric) UnmarshalJSON(buf []byte) error {
-	if err := json.Unmarshal(buf, s); err != nil {
+	var m rawMetric
+	if err := json.Unmarshal(buf, &m); err != nil {
 		return err
 	}
-	return s.Validate()
+	s.metricFromRaw(m)
+	return s.validate()
+}
+
+func (s *Metric) SetName(name string) *Metric {
+	s.name = name
+	return s
 }
 
 // get readable metric name:
 // requests_total{instance="localhost",port="9090"}
 func (s *Metric) String() string {
 	if len(s.Labels) == 0 {
-		return s.Name
+		return s.name
 	}
 	pairs := []string{}
 	for k, v := range s.Labels {
 		pairs = append(pairs, fmt.Sprintf(`%s="%s"`, k, v))
 	}
-	return fmt.Sprintf("%s{%s}", s.Name, strings.Join(pairs, ","))
+	return fmt.Sprintf("%s{%s}", s.name, strings.Join(pairs, ","))
 }
 
 // generate a set of metrics with one timestamp/value from the generic one
@@ -46,8 +60,7 @@ func (s *Metric) Slice() []Metric {
 	items := []Metric{}
 	for i, _ := range s.Values {
 		items = append(items, Metric{
-			Name:       s.Name,
-			Validated:  s.Validated,
+			name:       s.name,
 			Labels:     s.Labels,
 			Values:     []float64{s.Values[i]},
 			Timestamps: []int64{s.Timestamps[i]},
@@ -57,19 +70,20 @@ func (s *Metric) Slice() []Metric {
 }
 
 // ensure metric is valid
-func (s *Metric) Validate() error {
-	if _, ok := s.Labels[metricNameLabel]; !ok {
-		return errors.New("name label does not exit")
-	}
-	s.Name = s.Labels[metricNameLabel]
-	delete(s.Labels, metricNameLabel)
-
+func (s *Metric) validate() error {
 	if len(s.Values) != len(s.Timestamps) {
-		return errors.New("amoint of values is not equal to timestamps")
+		return errors.New("amount of values is not equal to timestamps")
 	}
 	if len(s.Values) == 0 {
 		return errors.New("metric is empty")
 	}
-	s.Validated = true
 	return nil
+}
+
+func (s *Metric) metricFromRaw(m rawMetric) {
+	s.Labels = m.Labels
+	s.Values = m.Values
+	s.Timestamps = m.Timestamps
+	s.name = m.Labels[metricNameLabel]
+	delete(m.Labels, metricNameLabel)
 }

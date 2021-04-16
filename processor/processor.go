@@ -7,18 +7,19 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/metrics"
+	"github.com/afoninsky-go/hhistogram/metric"
 )
 
 type Processor struct {
 	sync.Mutex
 	cfg     Config
-	buckets map[time.Time][]Metric
+	buckets map[time.Time][]metric.Metric
 }
 
 func NewHistogramProcessor(cfg Config) *Processor {
 	p := &Processor{}
 	p.cfg = cfg
-	p.buckets = make(map[time.Time][]Metric, 0)
+	p.buckets = make(map[time.Time][]metric.Metric, 0)
 	return p
 }
 
@@ -26,27 +27,27 @@ func NewHistogramProcessor(cfg Config) *Processor {
 func (s *Processor) AppendFromStream(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		var metric Metric
-		if err := metric.UnmarshalJSON(scanner.Bytes()); err != nil {
+		var m metric.Metric
+		if err := m.UnmarshalJSON(scanner.Bytes()); err != nil {
 			return err
 		}
-		for _, m := range metric.Slice() {
+		for _, m1 := range m.Slice() {
 			// create metric with one dimension and redefine its name
-			m.Name = s.cfg.Name
-			s.PushToBucket(m)
+			m1.SetName(s.cfg.Name)
+			s.PushToBucket(m1)
 		}
 	}
 	return scanner.Err()
 }
 
 // places metrics based on their timestamps to a specific bucket
-func (s *Processor) PushToBucket(m Metric) {
+func (s *Processor) PushToBucket(m metric.Metric) {
 	s.Lock()
 	defer s.Unlock()
 	timestamp := time.Unix(0, m.Timestamps[0]*int64(time.Millisecond))
 	upperBorder := timestamp.Truncate(s.cfg.SliceDuration).Add(s.cfg.SliceDuration)
 	if _, ok := s.buckets[upperBorder]; !ok {
-		s.buckets[upperBorder] = []Metric{}
+		s.buckets[upperBorder] = []metric.Metric{}
 	}
 	s.buckets[upperBorder] = append(s.buckets[upperBorder], m)
 }
