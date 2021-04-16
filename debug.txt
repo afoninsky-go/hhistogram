@@ -1,0 +1,3 @@
+{"metric":{"__name__":"requests_total","instance":"localhost","port":"9090"},"values":[123],"timestamps":[1598089314604]}
+{"metric":{"__name__":"requests_total","instance":"localhost","port":"9090"},"values":[123],"timestamps":[1598089314604]}
+{"metric":{"__name__":"requests_total","instance":"localhost","port":"9090"},"values":[123],"timestamps":[1598089314604]}
