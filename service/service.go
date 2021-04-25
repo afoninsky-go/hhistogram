@@ -65,50 +65,6 @@ func (s *Service) BulkHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(bodyBytes)
 }
 
-// func copyHeaders(dst, src http.Header) {
-// 	for k, vv := range src {
-// 		for _, v := range vv {
-// 			dst.Add(k, v)
-// 		}
-// 	}
-// }
-
-// func httpForwarder(w http.ResponseWriter, r *http.Request) {
-// 	res, err := http.DefaultTransport.RoundTrip(r)
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-// 		return
-// 	}
-// 	defer res.Body.Close()
-// 	copyHeaders(w.Header(), res.Header)
-// 	w.WriteHeader(res.StatusCode)
-// 	if _, err := io.Copy(w, res.Body); err != nil {
-// 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-// 		return
-// 	}
-// }
-
-// func (s *Service) streamResponse() {
-// 	httpClient := &http.Client{}
-// 	req, _ := http.NewRequest(httpMethod, fmt.Sprintf("%s/?region=%s", cfg.Endpoint, record.AWSRegion), obj.Body)
-// 	httpUserAgent := fmt.Sprintf("kourier-lambda/%s", cfg.Version)
-// 	referer := fmt.Sprintf("s3://%s/%s", record.S3.Bucket.Name, record.S3.Object.Key)
-// 	req.Header.Set("Content-Encoding", httpContentEncoding)
-// 	req.Header.Set("User-Agent", httpUserAgent)
-// 	req.Header.Set("Referer", referer)
-// 	res, err := httpClient.Do(req)
-// 	if err != nil {
-// 		return errors.Wrap(err, "http")
-
-// 	}
-// 	defer res.Body.Close()
-// 	if res.StatusCode != http.StatusOK {
-// 		return errors.Wrap(fmt.Errorf("invalid response status - %d", res.StatusCode), "http")
-// 	}
-// 	return nil
-
-// }
-
 // convert http event to obfuscated metric
 func (s *Service) OnMetric(m *metric.Metric) error {
 	// ensure "url" and "method" labels exist in the source metric
