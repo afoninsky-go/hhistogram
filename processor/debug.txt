@@ -1,3 +1,1 @@
-{"metric":{"__name__":"requests_total","instance":"localhost","port":"9090"},"values":[123],"timestamps":[1598089314604]}
-{"metric":{"__name__":"requests_total","instance":"localhost","port":"9090"},"values":[123],"timestamps":[1598089314604]}
-{"metric":{"__name__":"requests_total","instance":"localhost","port":"9090"},"values":[123],"timestamps":[1598089314604]}
+{"metric":{"__name__":"http_request_latency","method":"POST","url":"http://www.google.com/qwe/asd?zxc=dvb"},"values":[123,124],"timestamps":[1598089314604,1598089314605]}

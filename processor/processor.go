@@ -8,6 +8,7 @@ import (
 
 	"github.com/VictoriaMetrics/metrics"
 	"github.com/afoninsky-go/hhistogram/metric"
+	"github.com/afoninsky-go/logger"
 )
 
 type MetricInterceptor interface {
@@ -19,12 +20,14 @@ type Processor struct {
 	cfg         Config
 	buckets     map[time.Time][]metric.Metric
 	interceptor MetricInterceptor
+	log         *logger.Logger
 }
 
 func NewHistogramProcessor(cfg Config) *Processor {
 	p := &Processor{}
 	p.cfg = cfg
 	p.buckets = make(map[time.Time][]metric.Metric, 0)
+	p.log = logger.NewSTDLogger()
 	return p
 }
 
@@ -44,7 +47,9 @@ func (s *Processor) ReadFromStream(r io.Reader) error {
 					return err
 				}
 			}
-			s.pushToBucket(m1)
+			if m1.GetName() != "" {
+				s.pushToBucket(m1)
+			}
 		}
 	}
 	return scanner.Err()
@@ -53,6 +58,11 @@ func (s *Processor) ReadFromStream(r io.Reader) error {
 // specify metric handler for every incoming metric
 func (s *Processor) WithInterceptor(handler MetricInterceptor) *Processor {
 	s.interceptor = handler
+	return s
+}
+
+func (s *Processor) WithLogger(log *logger.Logger) *Processor {
+	s.log = log
 	return s
 }
 

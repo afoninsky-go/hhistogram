@@ -42,6 +42,10 @@ func (s *Metric) SetName(name string) *Metric {
 	return s
 }
 
+func (s *Metric) GetName() string {
+	return s.name
+}
+
 // get readable metric name:
 // requests_total{instance="localhost",port="9090"}
 func (s *Metric) String() string {
@@ -52,16 +56,21 @@ func (s *Metric) String() string {
 	for k, v := range s.Labels {
 		pairs = append(pairs, fmt.Sprintf(`%s="%s"`, k, v))
 	}
-	return fmt.Sprintf("%s{%s}", s.name, strings.Join(pairs, ","))
+	return fmt.Sprintf("%s{%s}", s.GetName(), strings.Join(pairs, ","))
 }
 
 // generate a set of metrics with one timestamp/value from the generic one
 func (s *Metric) Slice() []Metric {
 	items := []Metric{}
 	for i, _ := range s.Values {
+		// copy labels
+		labels := map[string]string{}
+		for k, v := range s.Labels {
+			labels[k] = v
+		}
 		items = append(items, Metric{
 			name:       s.name,
-			Labels:     s.Labels,
+			Labels:     labels,
 			Values:     []float64{s.Values[i]},
 			Timestamps: []int64{s.Timestamps[i]},
 		})

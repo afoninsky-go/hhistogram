@@ -12,20 +12,25 @@ import (
 
 const httpTimeout = 15 * time.Second
 const httpListenAddr = "127.0.0.1:8000"
+const histogramName = "test"
 
 func main() {
 	log := logger.NewSTDLogger()
+	processorConfig := processor.NewConfig().WithName(histogramName)
 	router := mux.NewRouter()
-	api := openapi.NewURLParser()
+	api := openapi.NewURLParser().WithLogger(log)
 
 	// convert incoming bulks of metrics into histograms
 	router.Path("/bulk").Methods(http.MethodPost).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg := processor.NewHistogramConfig().WithName("test")
-		bulk := processor.NewHistogramProcessor(*cfg).WithInterceptor(api)
+		// create bulk processor to convert stream of http events into set of histograms
+		bulk := processor.NewHistogramProcessor(processorConfig).WithInterceptor(api).WithLogger(log)
+		// stream JSONP events
 		if err := bulk.ReadFromStream(r.Body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		// display result
 		bulk.Process(w)
 		// fmt.Fprintf(w, "OK")
 	})

@@ -12,18 +12,18 @@ type Config struct {
 	SliceDuration time.Duration
 }
 
-func NewHistogramConfig() *Config {
-	s := &Config{}
+func NewConfig() Config {
+	s := Config{}
 	s.SliceDuration = time.Minute * 10
 	return s
 }
 
-func (s *Config) WithName(name string) *Config {
+func (s Config) WithName(name string) Config {
 	s.Name = name
 	return s
 }
 
-func (s *Config) WithSliceDuration(duration time.Duration) *Config {
+func (s Config) WithSliceDuration(duration time.Duration) Config {
 	s.SliceDuration = duration
 	return s
 }
