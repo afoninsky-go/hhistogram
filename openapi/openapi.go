@@ -2,19 +2,19 @@ package openapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
-	"github.com/afoninsky-go/hhistogram/metric"
 	"github.com/afoninsky-go/logger"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const defaultHost = "localhost"
-const lruCacheSize = 100000
+const lruCacheSize = 1e6
 
 var ErrRouteNotFound = errors.New("route not found")
 
@@ -23,9 +23,16 @@ type routerSpec struct {
 	// identifier of opeanapi spec which implements this router
 	SpecID string
 }
+
+type cacheSpec struct {
+	Route OpenAPIRoute
+	Err   error
+}
+
 type OpenAPI struct {
 	routers map[string]routerSpec
 	log     *logger.Logger
+	cache   *lru.Cache
 }
 
 // router found based on passed url
@@ -44,25 +51,30 @@ func NewURLParser() *OpenAPI {
 	s := &OpenAPI{}
 	s.routers = make(map[string]routerSpec, 0)
 	s.log = logger.NewSTDLogger()
+	cache, _ := lru.New(lruCacheSize)
+	s.cache = cache
 	return s
 }
 
 // load swagger specification from file
-func (s *OpenAPI) LoadFromFile(specID, path string, hosts []string) error {
-	spec, err := openapi3.NewSwaggerLoader().LoadSwaggerFromFile("./swagger.json")
+func (s *OpenAPI) AddSpec(specID, path string, hosts []string) error {
+	spec, err := openapi3.NewSwaggerLoader().LoadSwaggerFromFile(path)
 	if err != nil {
 		return err
 	}
 	// create routers
 	apiRouter, _ := gorillamux.NewRouter(spec)
 	router := routerSpec{SpecID: specID, Router: apiRouter}
-	if len(hosts) > 0 {
-		for _, host := range hosts {
-			s.routers[host] = router
-		}
-	} else {
-		s.routers[defaultHost] = router
+	if len(hosts) == 0 {
+		return errors.New("no hosts specified")
 	}
+	for _, host := range hosts {
+		if _, exists := s.routers[host]; exists {
+			return fmt.Errorf("host already loaded: %s", host)
+		}
+		s.routers[host] = router
+	}
+
 	return nil
 }
 
@@ -71,104 +83,67 @@ func (s *OpenAPI) WithLogger(log *logger.Logger) *OpenAPI {
 	return s
 }
 
-func (s *OpenAPI) FindRoute(method string, reqURL url.URL) (*OpenAPIRoute, error) {
-	// TODO: cache find route requests
+// search request in loaded openapi specification
+func (s *OpenAPI) Resolve(req http.Request) (OpenAPIRoute, error) {
+	cacheID := fmt.Sprintf("%s|%s", req.Method, req.URL)
 
-	var path *OpenAPIRoute
-	var err error
-
-	// try to find route with specified host
-	path, err = s.findRoute(method, reqURL)
-	if err != nil {
-		// not found in specific host -> try to find in default one
-		if err == ErrRouteNotFound && reqURL.Host != defaultHost {
-			reqURL.Host = defaultHost
-			path, err = s.findRoute(method, reqURL)
+	// check if url already cached
+	if s.cache != nil {
+		cache, ok := s.cache.Get(cacheID)
+		if ok {
+			res := cache.(cacheSpec)
+			return res.Route, res.Err
 		}
 	}
+
+	// resolve url against loaded openapi specifications
+	path, err := s.findRoute(req)
+	if err != nil {
+		// not found in specific host -> try to find in default one
+		if err == ErrRouteNotFound && req.URL.Host != defaultHost {
+			req.URL.Host = defaultHost
+			path, err = s.findRoute(req)
+		}
+	}
+
+	// cache result in order to speedup next requests
+	if s.cache != nil {
+		s.cache.Add(cacheID, cacheSpec{
+			Route: path,
+			Err:   err,
+		})
+	}
+
 	return path, err
 }
 
-func (s *OpenAPI) findRoute(method string, reqURL url.URL) (*OpenAPIRoute, error) {
-	req := http.Request{
-		Method: method,
-		URL:    &reqURL,
-	}
-	router, exists := s.routers[reqURL.Host]
+func (s *OpenAPI) findRoute(req http.Request) (OpenAPIRoute, error) {
+	result := OpenAPIRoute{}
+	router, exists := s.routers[req.URL.Host]
 	if !exists {
-		return nil, ErrRouteNotFound
+		return result, ErrRouteNotFound
 	}
 	route, _, err := router.FindRoute(&req)
 	if err != nil {
 		switch err {
 		case routers.ErrMethodNotAllowed:
-			return nil, ErrRouteNotFound
+			return result, ErrRouteNotFound
 		case routers.ErrPathNotFound:
-			return nil, ErrRouteNotFound
+			return result, ErrRouteNotFound
 		default:
-			return nil, err
+			return result, err
 		}
 	}
 
 	// return matched route with operation id and tag if exists
-	res := &OpenAPIRoute{
-		SpecID: router.SpecID,
-		Path:   route.Path,
-	}
+	result.SpecID = router.SpecID
+	result.Path = route.Path
 	if route.Operation != nil {
-		res.OperationID = route.Operation.OperationID
+		result.OperationID = route.Operation.OperationID
 		if len(route.Operation.Tags) > 0 {
-			res.Tag = strings.ToLower(route.Operation.Tags[0])
+			result.Tag = strings.ToLower(route.Operation.Tags[0])
 		}
 	}
 
-	return res, nil
-}
-
-// checks if metric has url-specific labels and decreases its cardinality
-func (s *OpenAPI) OnMetric(m *metric.Metric) error {
-	// ensure passed metric has "url" label
-	rawurl, ok := m.Labels["url"]
-	if !ok {
-		s.log.Warn("metric doesn't have url label, ignoring ...")
-		return nil
-	}
-	u, err := url.Parse(rawurl)
-	if err != nil {
-		s.log.Warnf("unable to parse %s, ignoring...", rawurl)
-		return nil
-	}
-
-	// remove high-cardinality url label
-	delete(m.Labels, "url")
-
-	// get method or set default
-	method := http.MethodGet
-	_method, ok := m.Labels["method"]
-	if ok {
-		method = _method
-	}
-
-	// add default labels
-	m.Labels["method"] = method
-	m.Labels["host"] = u.Host
-	m.Labels["scheme"] = u.Scheme
-	m.Labels["operation_id"] = ""
-	m.Labels["name"] = ""
-	m.Labels["tag"] = ""
-
-	// search loaded openapi schemas for specified url
-	route, err := s.FindRoute(method, *u)
-
-	switch err {
-	case nil:
-		m.Labels["operation_id"] = route.OperationID
-		m.Labels["name"] = route.SpecID
-		m.Labels["tag"] = route.Tag
-
-	case ErrRouteNotFound:
-		s.log.Warn("No route found, keeping defaults")
-		err = nil
-	}
-	return err
+	return result, nil
 }
