@@ -11,9 +11,10 @@ import (
 
 func TestCommon(t *testing.T) {
 	p := NewURLParser()
-	p.LoadFromFile("./swagger.json", []string{})
+	p.LoadFromFile("test-tenant", "./swagger.json", []string{"api.mambu.com"})
+	// p.LoadFromFile("default", "./swagger.json", []string{})
 
-	reqURL, _ := url.Parse("http://localhost/clients/clientid")
+	reqURL, _ := url.Parse("http://api.mamsbu.com/clients/clientid")
 	res, err := p.FindRoute(http.MethodGet, *reqURL)
 	fmt.Println(res)
 	fmt.Println(err)
