@@ -30,6 +30,8 @@ func assertRoute(t *testing.T, p *OpenAPI, method, reqURL, specID, path, operati
 
 func TestCommon(t *testing.T) {
 	p := NewURLParser()
+
+	// load specs
 	if err := p.AddSpec("users-spec", "./users.json", []string{}); err != nil {
 		t.Error(err)
 	}
@@ -42,13 +44,18 @@ func TestCommon(t *testing.T) {
 
 	// returs 404 for non-existing route in specs
 	assert.EqualError(t,
-		assertRoute(t, p, http.MethodGet, "http://api.mambu.com", "clients-spec", "/clients/{clientId}", "getById", "clients"),
+		assertRoute(t, p, http.MethodGet, "http://api.mambu.com", "", "", "", ""),
 		ErrRouteNotFound.Error(),
 	)
 
 	// resolves client route
 	assert.NoError(t,
 		assertRoute(t, p, http.MethodGet, "http://api.mambu.com/clients/id", "clients-spec", "/clients/{clientId}", "getById", "clients"),
+	)
+	// returs 404 for the same route but another method
+	assert.EqualError(t,
+		assertRoute(t, p, http.MethodPost, "http://api.mambu.com/clients/id", "", "", "", ""),
+		ErrRouteNotFound.Error(),
 	)
 
 	// resolves loan route
