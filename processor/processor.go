@@ -36,7 +36,11 @@ func (s *Processor) ReadFromStream(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		var m metric.Metric
-		if err := m.UnmarshalJSON(scanner.Bytes()); err != nil {
+		buf := scanner.Bytes()
+		if len(buf) == 0 {
+			continue
+		}
+		if err := m.UnmarshalJSON(buf); err != nil {
 			return err
 		}
 		for _, m1 := range m.Slice() {
