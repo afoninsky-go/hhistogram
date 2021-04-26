@@ -18,12 +18,10 @@ type MetricInterceptor interface {
 
 type Processor struct {
 	sync.Mutex
-	cfg            Config
-	buckets        map[time.Time][]metric.Metric
-	interceptor    MetricInterceptor
-	log            *logger.Logger
-	processedCount uint32
-	inputCount     uint32
+	cfg         Config
+	buckets     map[time.Time][]metric.Metric
+	interceptor MetricInterceptor
+	log         *logger.Logger
 }
 
 func NewHistogramProcessor(cfg Config) *Processor {
@@ -38,7 +36,6 @@ func NewHistogramProcessor(cfg Config) *Processor {
 func (s *Processor) ReadFromStream(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		s.inputCount++
 		var m metric.Metric
 		buf := scanner.Bytes()
 		if len(buf) == 0 {
@@ -86,14 +83,12 @@ func (s *Processor) Process(w io.Writer) {
 		for _, event := range events {
 			name := event.String()
 			for _, value := range event.Values {
-				s.processedCount++
 				storage.GetOrCreateHistogram(name).Update(value)
 			}
 		}
 		// read resulting metrics
 		storage.WritePrometheus(w)
 	}
-	s.log.Infof("Processed %d of %d events", s.processedCount, s.inputCount)
 }
 
 // places metrics based on their timestamps to a specific bucket

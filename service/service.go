@@ -11,6 +11,7 @@ import (
 	"github.com/afoninsky-go/hhistogram/openapi"
 	"github.com/afoninsky-go/hhistogram/processor"
 	"github.com/afoninsky-go/logger"
+	"github.com/prometheus/common/log"
 )
 
 type Config struct {
@@ -26,6 +27,10 @@ type Service struct {
 	log *logger.Logger
 	api *openapi.OpenAPI
 	cfg Config
+
+	processedCounter uint32
+	totalCounter     uint32
+	notFoundCounter  uint32
 }
 
 func NewHistogramService(cfg Config) (*Service, error) {
@@ -33,6 +38,24 @@ func NewHistogramService(cfg Config) (*Service, error) {
 	s.log = logger.NewSTDLogger()
 	s.api = openapi.NewURLParser().WithLogger(s.log)
 	s.cfg = cfg
+
+	go func() {
+		for {
+			time.Sleep(time.Second * 10)
+			if s.totalCounter > 0 {
+				var notFoundPercent uint32
+				if s.processedCounter > 0 {
+					notFoundPercent = s.notFoundCounter * 100 / s.processedCounter
+				} else {
+					notFoundPercent = 100
+				}
+				log.Infof("Processed %d of %d events, %d%% not found in openapi spec", s.processedCounter, s.totalCounter, notFoundPercent)
+				s.totalCounter = 0
+				s.notFoundCounter = 0
+				s.processedCounter = 0
+			}
+		}
+	}()
 
 	return s, s.api.LoadFolder(cfg.SpecFolder, []string{})
 }
@@ -80,6 +103,7 @@ func (s *Service) HealthHandler(w http.ResponseWriter, r *http.Request) {
 
 // convert http event to obfuscated metric
 func (s *Service) OnMetric(m *metric.Metric) error {
+	s.totalCounter++
 	// ensure "url" and "method" labels exist in the source metric
 	rawurl, ok := m.Labels["url"]
 	if !ok {
@@ -122,9 +146,11 @@ func (s *Service) OnMetric(m *metric.Metric) error {
 		m.Labels["operation_id"] = route.OperationID
 		m.Labels["name"] = route.SpecID
 		m.Labels["tag"] = route.Tag
+		s.processedCounter++
 
 	case openapi.ErrRouteNotFound:
 		// s.log.Warn("No route found, keeping defaults")
+		s.notFoundCounter++
 		err = nil
 	}
 	return err
