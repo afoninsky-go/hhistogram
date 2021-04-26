@@ -73,6 +73,7 @@ func (s *OpenAPI) LoadFolder(folder string, hosts []string) error {
 		if err := s.AddSpec(fileID, filePath, hosts); err != nil {
 			return err
 		}
+		s.log.Info("Spec loaded: ", fileName)
 	}
 
 	return nil

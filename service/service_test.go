@@ -29,36 +29,17 @@ func assertRoute(t *testing.T, p *OpenAPI, method, reqURL, specID, path, operati
 	return nil
 }
 
-func absPath(path string) string {
-	folder, err := filepath.Abs(path)
-	if err != nil {
-		panic(err)
-	}
-	return folder
-}
-
-func TestFolder(t *testing.T) {
-	p := NewURLParser()
-	folder, err := filepath.Abs("../test/json")
-	assert.NoError(t, err)
-	assert.NoError(t, p.LoadFolder(folder, []string{}))
-
-	assert.NoError(t,
-		assertRoute(t, p, http.MethodPost, "http://localhost/loans/id/lock-transactions", "loans_transactions_v2_swagger", "/loans/{loanAccountId}/lock-transactions", "applyLock", "loantransactions"),
-	)
-}
-
 func TestCommon(t *testing.T) {
 	p := NewURLParser()
 
 	// load specs
-	if err := p.AddSpec("users-spec", absPath("../test/json/users_v2_swagger.json"), []string{}); err != nil {
+	if err := p.AddSpec("users-spec", "./users.json", []string{}); err != nil {
 		t.Error(err)
 	}
-	if err := p.AddSpec("clients-spec", absPath("../test/json/clients_v2_swagger.json"), []string{}); err != nil {
+	if err := p.AddSpec("clients-spec", "./clients.json", []string{}); err != nil {
 		t.Error(err)
 	}
-	if err := p.AddSpec("loans-spec", absPath("../test/json/loans_transactions_v2_swagger.json"), []string{}); err != nil {
+	if err := p.AddSpec("loans-spec", "./loans.json", []string{}); err != nil {
 		t.Error(err)
 	}
 
@@ -88,4 +69,15 @@ func TestCommon(t *testing.T) {
 		assertRoute(t, p, http.MethodPost, "http://localhost/loans/id/lock-transactions", "loans-spec", "/loans/{loanAccountId}/lock-transactions", "applyLock", "loantransactions"),
 	)
 
+}
+
+func TestFolder(t *testing.T) {
+	p := NewURLParser()
+	folder, err := filepath.Abs("../test/json")
+	assert.NoError(t, err)
+	assert.NoError(t, p.LoadFolder(folder, []string{}))
+
+	assert.NoError(t,
+		assertRoute(t, p, http.MethodPost, "http://localhost/loans/id/lock-transactions", "loans_transactions_v2_swagger", "/loans/{loanAccountId}/lock-transactions", "applyLock", "loantransactions"),
+	)
 }
