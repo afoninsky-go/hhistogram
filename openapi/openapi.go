@@ -3,7 +3,10 @@ package openapi
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/afoninsky-go/logger"
@@ -54,6 +57,25 @@ func NewURLParser() *OpenAPI {
 	cache, _ := lru.New(lruCacheSize)
 	s.cache = cache
 	return s
+}
+
+// load swagger specs from folder
+func (s *OpenAPI) LoadFolder(folder string, hosts []string) error {
+	files, err := ioutil.ReadDir(folder)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		fileName := f.Name()
+		filePath := path.Join(folder, fileName)
+		fileID := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+		if err := s.AddSpec(fileID, filePath, hosts); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // load swagger specification from file

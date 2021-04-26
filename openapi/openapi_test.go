@@ -3,6 +3,7 @@ package openapi
 import (
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,4 +69,15 @@ func TestCommon(t *testing.T) {
 		assertRoute(t, p, http.MethodPost, "http://localhost/loans/id/lock-transactions", "loans-spec", "/loans/{loanAccountId}/lock-transactions", "applyLock", "loantransactions"),
 	)
 
+}
+
+func TestFolder(t *testing.T) {
+	p := NewURLParser()
+	folder, err := filepath.Abs("../test/json")
+	assert.NoError(t, err)
+	assert.NoError(t, p.LoadFolder(folder, []string{}))
+
+	assert.NoError(t,
+		assertRoute(t, p, http.MethodPost, "http://localhost/loans/id/lock-transactions", "loans_transactions_v2_swagger", "/loans/{loanAccountId}/lock-transactions", "applyLock", "loantransactions"),
+	)
 }
