@@ -2,6 +2,7 @@ package processor
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -17,10 +18,12 @@ type MetricInterceptor interface {
 
 type Processor struct {
 	sync.Mutex
-	cfg         Config
-	buckets     map[time.Time][]metric.Metric
-	interceptor MetricInterceptor
-	log         *logger.Logger
+	cfg            Config
+	buckets        map[time.Time][]metric.Metric
+	interceptor    MetricInterceptor
+	log            *logger.Logger
+	processedCount uint32
+	inputCount     uint32
 }
 
 func NewHistogramProcessor(cfg Config) *Processor {
@@ -35,13 +38,15 @@ func NewHistogramProcessor(cfg Config) *Processor {
 func (s *Processor) ReadFromStream(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
+		s.inputCount++
 		var m metric.Metric
 		buf := scanner.Bytes()
 		if len(buf) == 0 {
 			continue
 		}
 		if err := m.UnmarshalJSON(buf); err != nil {
-			return err
+			fmt.Println(err, string(buf))
+			continue
 		}
 		for _, m1 := range m.Slice() {
 			// create metric with one dimension and redefine its name
@@ -81,12 +86,14 @@ func (s *Processor) Process(w io.Writer) {
 		for _, event := range events {
 			name := event.String()
 			for _, value := range event.Values {
+				s.processedCount++
 				storage.GetOrCreateHistogram(name).Update(value)
 			}
 		}
 		// read resulting metrics
 		storage.WritePrometheus(w)
 	}
+	s.log.Infof("Processed %d of %d events", s.processedCount, s.inputCount)
 }
 
 // places metrics based on their timestamps to a specific bucket

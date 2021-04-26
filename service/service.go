@@ -74,6 +74,10 @@ func (s *Service) BulkHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(bodyBytes)
 }
 
+func (s *Service) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	// dummy health check
+}
+
 // convert http event to obfuscated metric
 func (s *Service) OnMetric(m *metric.Metric) error {
 	// ensure "url" and "method" labels exist in the source metric
@@ -120,7 +124,7 @@ func (s *Service) OnMetric(m *metric.Metric) error {
 		m.Labels["tag"] = route.Tag
 
 	case openapi.ErrRouteNotFound:
-		s.log.Warn("No route found, keeping defaults")
+		// s.log.Warn("No route found, keeping defaults")
 		err = nil
 	}
 	return err

@@ -10,7 +10,7 @@ import (
 )
 
 const httpTimeout = 15 * time.Second
-const httpListenAddr = "127.0.0.1:8000"
+const httpListenAddr = "127.0.0.1:8080"
 
 func main() {
 	log := logger.NewSTDLogger()
@@ -22,8 +22,11 @@ func main() {
 	})
 	log.FatalIfError(err)
 
-	// start http server
+	router.Use(log.CreateMiddleware())
 	router.Path("/bulk").Methods(http.MethodPost).HandlerFunc(histogram.BulkHandler)
+	router.Path("/health").Methods(http.MethodGet).HandlerFunc(histogram.HealthHandler)
+	log.CreateMiddleware()
+
 	srv := &http.Server{
 		Handler:      router,
 		Addr:         httpListenAddr,

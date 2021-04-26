@@ -1,0 +1,91 @@
+sources:
+  from-curl:
+    type: http
+    address: 127.0.0.1:7999
+    encoding: text
+    path: /
+
+  from-histogram:
+    type: http
+    address: 127.0.0.1:8081
+    encoding: text
+    path: /
+
+transforms:
+  ### create http event from log entity
+  # -> {"api_version":"","environment_tag":"","latency":0.021,"method":"GET","status":200,"tier":"aws-alb","timestamp":"2021-03-16T20:20:16.381293Z","url":"http://..."}
+  http-event:
+    type: remap
+    inputs: ["from-curl"]
+    drop_on_error: true
+    drop_on_abort: true
+    source: |
+      # assert!(!is_nullish(.region), message: "Event should contain AWS region")
+      http = parse_grok!(.message, "%{ELB_ACCESS_LOG}")
+
+      # generate http event
+      event = {}
+
+      ### metric labels
+      # event.region = .region
+      event.method = http.verb
+      event.status = http."response:int"
+      event.url = http.request
+      event.tier = "aws-alb"
+      event.environment_tag = ""
+      event.api_version = ""
+
+      ### metric real timestamp
+      event.timestamp = http.timestamp
+
+      # metric value
+      event.latency = to_float!(http."backend_processing_time:float")
+
+      . = event
+
+  ### create vm-compatible metric from http event:
+  # -> {"metric":{"__name__":"http_request_latency","method":"POST"},"values":[1,2],"timestamps":[1598089314604,1598089314604]}
+  http-metric:
+    type: remap
+    inputs: ["http-event"]
+    drop_on_error: true
+    drop_on_abort: true
+    source: |
+      event = .
+      . = {}
+
+      ts = to_timestamp!(event.timestamp)
+      unixtime_str = format_timestamp!(ts, format: "%s")
+      unixtime_sec = to_int!(unixtime_str)
+
+      .timestamps = [ unixtime_sec * 1000 ]
+      .values = [ event.latency ]
+
+      del(event.latency)
+      del(event.timestamp)
+
+      .metric = event
+
+sinks:
+  to-histogram:
+    type: http
+    inputs: ["http-metric"]
+    uri: http://127.0.0.1:8080/bulk?query=test
+    encoding: ndjson
+    # healthcheck:
+    #   enabled: true
+    #   uri: http://127.0.0.1:8080/health
+    request:
+      concurrency: adaptive
+      timeout_secs: 60
+    batch:
+      # 100mb batch
+      max_bytes: 104857600
+      timeout_secs: 10
+
+  to-console:
+    type: console
+    inputs: ["from-histogram"]
+    target: stdout
+    encoding:
+      codec: text
