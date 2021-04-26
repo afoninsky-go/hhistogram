@@ -72,9 +72,9 @@ sinks:
     inputs: ["http-metric"]
     uri: http://127.0.0.1:8080/bulk?query=test
     encoding: ndjson
-    # healthcheck:
-    #   enabled: true
-    #   uri: http://127.0.0.1:8080/health
+    healthcheck:
+      enabled: true
+      uri: http://127.0.0.1:8080/health
     request:
       concurrency: adaptive
       timeout_secs: 60
