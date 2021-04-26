@@ -15,7 +15,12 @@ const httpListenAddr = "127.0.0.1:8000"
 func main() {
 	log := logger.NewSTDLogger()
 	router := mux.NewRouter()
-	histogram := service.NewHistogramService()
+	histogram, err := service.NewHistogramService(service.Config{
+		HistogramName:  "test",
+		OutputEndpoint: "http://localhost:8081",
+		SpecFolder:     "./test/json",
+	})
+	log.FatalIfError(err)
 
 	// start http server
 	router.Path("/bulk").Methods(http.MethodPost).HandlerFunc(histogram.BulkHandler)

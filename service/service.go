@@ -13,25 +13,34 @@ import (
 	"github.com/afoninsky-go/logger"
 )
 
-const histogramName = "test"
-const endpoint = "http://localhost:8081"
+type Config struct {
+	// resulting histogram name
+	HistogramName string
+	// http receiver of generated metrics
+	OutputEndpoint string
+	// folder with openapi schemas
+	SpecFolder string
+}
 
 type Service struct {
 	log *logger.Logger
 	api *openapi.OpenAPI
+	cfg Config
 }
 
-func NewHistogramService() *Service {
+func NewHistogramService(cfg Config) (*Service, error) {
 	s := &Service{}
 	s.log = logger.NewSTDLogger()
 	s.api = openapi.NewURLParser().WithLogger(s.log)
-	return s
+	s.cfg = cfg
+
+	return s, s.api.LoadFolder(cfg.SpecFolder, []string{})
 }
 
 // convert incoming bulks of metrics into histograms
 func (s *Service) BulkHandler(w http.ResponseWriter, r *http.Request) {
 	// create bulk processor to convert stream of http events into set of histograms
-	config := processor.NewConfig().WithName(histogramName)
+	config := processor.NewConfig().WithName(s.cfg.HistogramName)
 	bulk := processor.NewHistogramProcessor(config).WithInterceptor(s).WithLogger(s.log)
 
 	// process incoming metrics
@@ -41,7 +50,7 @@ func (s *Service) BulkHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get remote endpoint with passed query args
-	u, _ := url.Parse(endpoint)
+	u, _ := url.Parse(s.cfg.OutputEndpoint)
 	u.RawQuery = r.URL.RawQuery
 
 	// proxy processor response to endpoint
