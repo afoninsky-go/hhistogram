@@ -63,4 +63,9 @@ func TestCommon(t *testing.T) {
 		assertRoute(t, p, http.MethodPost, "http://localhost/loans/id/lock-transactions", "loans-spec", "/loans/{loanAccountId}/lock-transactions", "applyLock", "loantransactions"),
 	)
 
+	// check caching function
+	assert.NoError(t,
+		assertRoute(t, p, http.MethodPost, "http://localhost/loans/id/lock-transactions", "loans-spec", "/loans/{loanAccountId}/lock-transactions", "applyLock", "loantransactions"),
+	)
+
 }
