@@ -1,30 +1,59 @@
 package openapi
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // https://demotenant.dev.mambucloud.com/apidocs/
 
+func assertRoute(t *testing.T, p *OpenAPI, method, reqURL, specID, path, operationID, tag string) error {
+	u, _ := url.Parse(reqURL)
+	req := http.Request{
+		Method: method,
+		URL:    u,
+	}
+	res, err := p.Resolve(req)
+	if err != nil {
+		return err
+	}
+	assert.Equal(t, specID, res.SpecID)
+	assert.Equal(t, path, res.Path)
+	assert.Equal(t, operationID, res.OperationID)
+	assert.Equal(t, tag, res.Tag)
+
+	return nil
+}
+
 func TestCommon(t *testing.T) {
 	p := NewURLParser()
-	p.AddSpec("test-tenant", "./swagger.json", []string{"api.mambu.com"})
-	p.AddSpec("default-tenant", "./swagger.json", []string{"localhost"})
-
-	reqURL, _ := url.Parse("http://api.dmambu.com/clients/clientid")
-	req := http.Request{
-		Method: http.MethodGet,
-		URL:    reqURL,
+	if err := p.AddSpec("users-spec", "./users.json", []string{}); err != nil {
+		t.Error(err)
+	}
+	if err := p.AddSpec("clients-spec", "./clients.json", []string{}); err != nil {
+		t.Error(err)
+	}
+	if err := p.AddSpec("loans-spec", "./loans.json", []string{}); err != nil {
+		t.Error(err)
 	}
 
-	res1, err1 := p.Resolve(req)
-	res2, err2 := p.Resolve(req)
-	fmt.Println(res1)
-	fmt.Println(res2)
-	fmt.Println(err1)
-	fmt.Println(err2)
+	// returs 404 for non-existing route in specs
+	assert.EqualError(t,
+		assertRoute(t, p, http.MethodGet, "http://api.mambu.com", "clients-spec", "/clients/{clientId}", "getById", "clients"),
+		ErrRouteNotFound.Error(),
+	)
+
+	// resolves client route
+	assert.NoError(t,
+		assertRoute(t, p, http.MethodGet, "http://api.mambu.com/clients/id", "clients-spec", "/clients/{clientId}", "getById", "clients"),
+	)
+
+	// resolves loan route
+	assert.NoError(t,
+		assertRoute(t, p, http.MethodPost, "http://localhost/loans/id/lock-transactions", "loans-spec", "/loans/{loanAccountId}/lock-transactions", "applyLock", "loantransactions"),
+	)
 
 }
