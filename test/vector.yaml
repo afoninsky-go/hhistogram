@@ -83,7 +83,14 @@ sinks:
       max_bytes: 104857600
       timeout_secs: 10
 
-  to-console:
+  display-events:
+    type: console
+    inputs: ["http-metric"]
+    target: stdout
+    encoding:
+      codec: json
+
+  display-results:
     type: console
     inputs: ["from-histogram"]
     target: stdout

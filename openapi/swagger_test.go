@@ -1,51 +1,27 @@
 package openapi
 
+import (
+	"fmt"
+	"net/http"
+	"testing"
+)
+
 // https://demotenant.dev.mambucloud.com/apidocs/
 
-// func assertRoute(t *testing.T, p *OpenAPI, method, reqURL, specID, path, operationID, tag string) error {
-// 	u, _ := url.Parse(reqURL)
-// 	req := http.Request{
-// 		Method: method,
-// 		URL:    u,
-// 	}
-// 	res, err := p.Resolve(req)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	assert.Equal(t, specID, res.SpecID)
-// 	assert.Equal(t, path, res.Path)
-// 	assert.Equal(t, operationID, res.OperationID)
-// 	assert.Equal(t, tag, res.Tag)
-
-// 	return nil
-// }
-
-// func absPath(path string) string {
-// 	folder, err := filepath.Abs(path)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	return folder
-// }
-
-// func TestMambuSpecs(t *testing.T) {
-// 	p := NewOpenAPI2Router()
-// 	if err := p.addSpecFromFile("../test/json/users_v2_swagger.json"); err != nil {
-// 		panic(err)
-// 	}
-// 	fmt.Println(">>>>")
-// 	req, err := http.NewRequest(http.MethodGet, "http://localhost/api/users/qwe/asd", nil)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	res := p.testRoute(req)
-// 	if res != nil {
-// 		fmt.Println("route found:")
-// 		fmt.Println(res)
-// 	} else {
-// 		fmt.Println("route NOT found")
-// 	}
-// }
+func TestMambuSpecs(t *testing.T) {
+	p := NewSwaggerRouter()
+	if err := p.addSpecFromFile("../test/json/users_v2_swagger.json"); err != nil {
+		panic(err)
+	}
+	fmt.Println(">>>>")
+	req1, _ := http.NewRequest(http.MethodGet, "http://localhost/api/users", nil)
+	req2, _ := http.NewRequest(http.MethodGet, "http://localhost/api/users", nil)
+	res1 := p.testRoute(req1)
+	res2 := p.testRoute(req2)
+	fmt.Println(res1)
+	fmt.Println(res2)
+	fmt.Println(res1 == res2)
+}
 
 // func TestMambuSpecs(t *testing.T) {
 // 	p := NewURLParser()
