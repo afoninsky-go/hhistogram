@@ -1,4 +1,4 @@
-package openapi
+package swagger
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 
 const lruCacheSize = 1e6
 
-type swagger struct {
+type Swagger struct {
 	routes     []*mux.Route
 	routeSpecs []RouteSpec
 	cache      *lru.Cache
@@ -33,15 +33,15 @@ type RouteSpec struct {
 	Tag string
 }
 
-func NewSwaggerRouter() *swagger {
-	s := swagger{}
+func NewSwaggerRouter() *Swagger {
+	s := Swagger{}
 	cache, _ := lru.New(lruCacheSize)
 	s.cache = cache
 	return &s
 }
 
 // load swagger specs from folder
-func (s *swagger) LoadSpecFolder(folder string) error {
+func (s *Swagger) LoadSpecFolder(folder string) error {
 	files, err := ioutil.ReadDir(folder)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (s *swagger) LoadSpecFolder(folder string) error {
 }
 
 // loads routes from swagger specification
-func (s *swagger) AddSpecFromFile(id, path string) error {
+func (s *Swagger) AddSpecFromFile(id, path string) error {
 	spec := openapi2.Swagger{}
 	buf, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -96,7 +96,7 @@ func (s *swagger) AddSpecFromFile(id, path string) error {
 }
 
 // tests request against loaded routes
-func (s *swagger) TestRoute(req *http.Request) *RouteSpec {
+func (s *Swagger) TestRoute(req *http.Request) *RouteSpec {
 	cacheID := s.requestID(req)
 	cache, ok := s.cache.Get(cacheID)
 	if ok {
@@ -109,7 +109,7 @@ func (s *swagger) TestRoute(req *http.Request) *RouteSpec {
 
 // generates unique request identificator based on configured matchers
 // used for caching purposes mostly
-func (s *swagger) requestID(req *http.Request) string {
+func (s *Swagger) requestID(req *http.Request) string {
 	if req == nil {
 		return ""
 	}
@@ -117,7 +117,7 @@ func (s *swagger) requestID(req *http.Request) string {
 	return strings.Join(parts, ",")
 }
 
-func (s *swagger) getRouteIndex(req *http.Request) int {
+func (s *Swagger) getRouteIndex(req *http.Request) int {
 	for i, route := range s.routes {
 		var match mux.RouteMatch
 		if route.Match(req, &match) && match.MatchErr == nil {
@@ -127,7 +127,7 @@ func (s *swagger) getRouteIndex(req *http.Request) int {
 	return -1
 }
 
-func (s *swagger) getRouteSpec(i int) *RouteSpec {
+func (s *Swagger) getRouteSpec(i int) *RouteSpec {
 	if i < 0 {
 		return nil
 	}

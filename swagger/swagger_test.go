@@ -1,4 +1,4 @@
-package openapi
+package swagger
 
 import (
 	"fmt"

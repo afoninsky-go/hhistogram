@@ -67,6 +67,8 @@ transforms:
       .metric = event
 
 sinks:
+  ### add labels from openapi spec and obfuscates url: { method, url } => { method, service, action }
+  ### generates histograms from http metrics
   to-histogram:
     type: http
     inputs: ["http-metric"]
@@ -83,12 +85,12 @@ sinks:
       max_bytes: 104857600
       timeout_secs: 10
 
-  display-events:
-    type: console
-    inputs: ["http-metric"]
-    target: stdout
-    encoding:
-      codec: json
+  # display-events:
+  #   type: console
+  #   inputs: ["http-metric"]
+  #   target: stdout
+  #   encoding:
+  #     codec: json
 
   display-results:
     type: console

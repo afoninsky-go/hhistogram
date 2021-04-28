@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/afoninsky-go/hhistogram/metric"
-	"github.com/afoninsky-go/hhistogram/openapi"
 	"github.com/afoninsky-go/hhistogram/processor"
+	"github.com/afoninsky-go/hhistogram/swagger"
 	"github.com/afoninsky-go/logger"
 	"github.com/prometheus/common/log"
 )
@@ -25,7 +25,7 @@ type Config struct {
 
 type Service struct {
 	log *logger.Logger
-	api *openapi.OpenAPI
+	api *swagger.Swagger
 	cfg Config
 
 	processedCounter uint32
@@ -36,7 +36,7 @@ type Service struct {
 func NewHistogramService(cfg Config) (*Service, error) {
 	s := &Service{}
 	s.log = logger.NewSTDLogger()
-	s.api = openapi.NewURLParser().WithLogger(s.log)
+	s.api = swagger.NewSwaggerRouter()
 	s.cfg = cfg
 
 	go func() {
@@ -49,7 +49,7 @@ func NewHistogramService(cfg Config) (*Service, error) {
 				} else {
 					notFoundPercent = 100
 				}
-				log.Infof("Processed %d of %d events, %d%% not found in openapi spec", s.processedCounter, s.totalCounter, notFoundPercent)
+				log.Infof("Processed %d of %d events, %d%% not found in swager spec", s.processedCounter, s.totalCounter, notFoundPercent)
 				s.totalCounter = 0
 				s.notFoundCounter = 0
 				s.processedCounter = 0
@@ -57,7 +57,7 @@ func NewHistogramService(cfg Config) (*Service, error) {
 		}
 	}()
 
-	return s, s.api.LoadFolder(cfg.SpecFolder, []string{})
+	return s, s.api.LoadSpecFolder(cfg.SpecFolder)
 }
 
 // convert incoming bulks of metrics into histograms
@@ -104,7 +104,8 @@ func (s *Service) HealthHandler(w http.ResponseWriter, r *http.Request) {
 // convert http event to obfuscated metric
 func (s *Service) OnMetric(m *metric.Metric) error {
 	s.totalCounter++
-	// ensure "url" and "method" labels exist in the source metric
+
+	// ensure "url" and "method" labels exist in the source metric -> metric is valid
 	rawurl, ok := m.Labels["url"]
 	if !ok {
 		s.log.Warn("metric doesn't have url label, ignoring ...")
@@ -125,33 +126,27 @@ func (s *Service) OnMetric(m *metric.Metric) error {
 	}
 	delete(m.Labels, "url")
 
-	// add default labels
-	m.Labels["method"] = method
-	m.Labels["host"] = u.Host
-	m.Labels["scheme"] = u.Scheme
-	m.Labels["operation_id"] = ""
-	m.Labels["name"] = ""
-	m.Labels["tag"] = ""
+	// add http-specific labels
+	m.Labels["service"] = ""
+	m.Labels["action"] = ""
 
 	// search openapi schemas for specified url
 	req := http.Request{
 		Method: method,
 		URL:    u,
 	}
-	route, err := s.api.Resolve(req)
+	route := s.api.TestRoute(&req)
 
-	// add openapi-specific labels
-	switch err {
-	case nil:
-		m.Labels["operation_id"] = route.OperationID
-		m.Labels["name"] = route.SpecID
-		m.Labels["tag"] = route.Tag
-		s.processedCounter++
-
-	case openapi.ErrRouteNotFound:
-		// s.log.Warn("No route found, keeping defaults")
+	// route not found
+	if route == nil {
 		s.notFoundCounter++
-		err = nil
+		return nil
 	}
-	return err
+
+	// route found
+	m.Labels["service"] = route.Tag
+	m.Labels["action"] = route.Path
+	s.processedCounter++
+
+	return nil
 }
