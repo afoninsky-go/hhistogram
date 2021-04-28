@@ -26,17 +26,8 @@ func NewSwaggerRouter() *swagger {
 	return &s
 }
 
-// generates unique request identificator based on configured matchers
-func (s *swagger) requestID(req *http.Request) string {
-	if req == nil {
-		return ""
-	}
-	parts := []string{req.Method, req.URL.Path}
-	return strings.Join(parts, ",")
-}
-
 // loads routes from swagger specification
-func (s *swagger) addSpecFromFile(path string) error {
+func (s *swagger) AddSpecFromFile(path string) error {
 	spec := openapi2.Swagger{}
 	buf, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -61,7 +52,7 @@ func (s *swagger) addSpecFromFile(path string) error {
 }
 
 // tests request against loaded routes
-func (s *swagger) testRoute(req *http.Request) *openapi2.Operation {
+func (s *swagger) TestRoute(req *http.Request) *openapi2.Operation {
 	// check if route is in cache
 	cacheID := s.requestID(req)
 	cache, ok := s.cache.Get(cacheID)
@@ -77,13 +68,21 @@ func (s *swagger) testRoute(req *http.Request) *openapi2.Operation {
 			switch match.MatchErr {
 			case nil:
 				index = i
-				// case mux.ErrMethodMismatch:
-				// case mux.ErrNotFound:
 			}
 		}
 	}
 	s.cache.Add(cacheID, index)
 	return s.getOperationByIndex(index)
+}
+
+// generates unique request identificator based on configured matchers
+// used for caching purposes mostly
+func (s *swagger) requestID(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	parts := []string{req.Method, req.URL.Path}
+	return strings.Join(parts, ",")
 }
 
 func (s *swagger) getOperationIndex(req *http.Request) int {
