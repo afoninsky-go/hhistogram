@@ -10,20 +10,18 @@ import (
 
 func TestMambuSpecs(t *testing.T) {
 	p := NewSwaggerRouter()
-	if err := p.AddSpecFromFile("../test/json/users_v2_swagger.json"); err != nil {
-		panic(err)
-	}
-	if err := p.AddSpecFromFile("../test/json/configuration__branches.yaml_v2_swagger.json"); err != nil {
+	if err := p.LoadSpecFolder("../test/json"); err != nil {
 		panic(err)
 	}
 	fmt.Println(">>>>")
-	req1, _ := http.NewRequest(http.MethodGet, "http://localhost/api/users", nil)
-	req2, _ := http.NewRequest(http.MethodGet, "http://localhost/api/users", nil)
+	req1, _ := http.NewRequest(http.MethodGet, "http://localhost/api/users/test", nil)
+	req2, _ := http.NewRequest(http.MethodGet, "http://localhost/api/configuration/branches.yaml", nil)
 	res1 := p.TestRoute(req1)
 	res2 := p.TestRoute(req2)
 	fmt.Println(res1)
 	fmt.Println(res2)
 	fmt.Println(res1 == res2)
+	fmt.Println(res2.Tag)
 }
 
 // func TestMambuSpecs(t *testing.T) {

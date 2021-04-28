@@ -4,7 +4,10 @@ import (
 	"context"
 	"io/ioutil"
 	"net/http"
+	"path"
+	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/getkin/kin-openapi/openapi2"
 	"github.com/gorilla/mux"
@@ -15,8 +18,19 @@ const lruCacheSize = 1e6
 
 type swagger struct {
 	routes     []*mux.Route
-	operations []*openapi2.Operation
+	routeSpecs []RouteSpec
 	cache      *lru.Cache
+}
+
+type RouteSpec struct {
+	// identifier of openapi spec where selected route was found
+	ID string
+	// openapi http path
+	Path string
+	// openapi route operation id (optional)
+	OperationID string
+	// openapi route tag (optional)
+	Tag string
 }
 
 func NewSwaggerRouter() *swagger {
@@ -26,8 +40,27 @@ func NewSwaggerRouter() *swagger {
 	return &s
 }
 
+// load swagger specs from folder
+func (s *swagger) LoadSpecFolder(folder string) error {
+	files, err := ioutil.ReadDir(folder)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		fileName := f.Name()
+		filePath := path.Join(folder, fileName)
+		fileID := tokenize(strings.TrimSuffix(fileName, filepath.Ext(fileName)))
+		if err := s.AddSpecFromFile(fileID, filePath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // loads routes from swagger specification
-func (s *swagger) AddSpecFromFile(path string) error {
+func (s *swagger) AddSpecFromFile(id, path string) error {
 	spec := openapi2.Swagger{}
 	buf, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -41,38 +74,37 @@ func (s *swagger) AddSpecFromFile(path string) error {
 	}
 	for routeName, routePath := range spec.Paths {
 		for method, operation := range routePath.Operations() {
-			muxRouter := mux.NewRouter().HandleFunc(spec.BasePath+routeName, dummyHandler).
+			urlPath := spec.BasePath + routeName
+			muxRouter := mux.NewRouter().HandleFunc(urlPath, dummyHandler).
 				Schemes(spec.Schemes...).
 				Methods(method)
 			s.routes = append(s.routes, muxRouter)
-			s.operations = append(s.operations, operation)
+			routeSpec := RouteSpec{
+				ID:   id,
+				Path: urlPath,
+			}
+			if len(operation.Tags) > 0 {
+				routeSpec.Tag = tokenize(operation.Tags[0])
+			}
+			if operation.OperationID != "" {
+				routeSpec.OperationID = tokenize(operation.OperationID)
+			}
+			s.routeSpecs = append(s.routeSpecs, routeSpec)
 		}
 	}
 	return nil
 }
 
 // tests request against loaded routes
-func (s *swagger) TestRoute(req *http.Request) *openapi2.Operation {
-	// check if route is in cache
+func (s *swagger) TestRoute(req *http.Request) *RouteSpec {
 	cacheID := s.requestID(req)
 	cache, ok := s.cache.Get(cacheID)
 	if ok {
-		return s.getOperationByIndex(cache.(int))
+		return s.getRouteSpec(cache.(int))
 	}
-
-	// search route in routing table
-	index := -1
-	for i, route := range s.routes {
-		var match mux.RouteMatch
-		if route.Match(req, &match) {
-			switch match.MatchErr {
-			case nil:
-				index = i
-			}
-		}
-	}
+	index := s.getRouteIndex(req)
 	s.cache.Add(cacheID, index)
-	return s.getOperationByIndex(index)
+	return s.getRouteSpec(index)
 }
 
 // generates unique request identificator based on configured matchers
@@ -85,7 +117,7 @@ func (s *swagger) requestID(req *http.Request) string {
 	return strings.Join(parts, ",")
 }
 
-func (s *swagger) getOperationIndex(req *http.Request) int {
+func (s *swagger) getRouteIndex(req *http.Request) int {
 	for i, route := range s.routes {
 		var match mux.RouteMatch
 		if route.Match(req, &match) && match.MatchErr == nil {
@@ -95,16 +127,26 @@ func (s *swagger) getOperationIndex(req *http.Request) int {
 	return -1
 }
 
-func (s *swagger) getOperationByIndex(i int) *openapi2.Operation {
+func (s *swagger) getRouteSpec(i int) *RouteSpec {
 	if i < 0 {
 		return nil
 	}
-	if i > len(s.operations)-1 {
+	if i > len(s.routeSpecs)-1 {
 		return nil
 	}
-	return s.operations[i]
+	return &s.routeSpecs[i]
 }
 
 func dummyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Hi!"))
+}
+
+func tokenize(token string) string {
+	result := ""
+	for _, i := range token {
+		if unicode.IsLetter(i) {
+			result = result + string(i)
+		}
+	}
+	return strings.ToLower(result)
 }
