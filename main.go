@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/afoninsky-go/hhistogram/service"
@@ -13,17 +14,23 @@ import (
 const httpTimeout = 15 * time.Second
 
 func main() {
+	log := logger.NewSTDLogger()
+
 	httpListenAddr := fromEnv("HTTP_LISTEN", "127.0.0.1:8080")
 	httpReceiver := fromEnv("HTTP_RECEIVER", "http://localhost:8081")
-	hName := fromEnv("NAME", "test_histogram")
+	hName := fromEnv("HISTOGRAM_NAME", "test_histogram")
+	hDuration := fromEnv("HISTOGRAM_DURATION_MIN", "10")
 	specFolder := fromEnv("SPEC_PATH", "./test/json")
 
-	log := logger.NewSTDLogger()
+	hDurationMin, err := strconv.Atoi(hDuration)
+	log.FatalIfError(err)
+
 	router := mux.NewRouter()
 	histogram, err := service.NewHistogramService(service.Config{
-		HistogramName:  hName,
-		OutputEndpoint: httpReceiver,
-		SpecFolder:     specFolder,
+		HistogramName:          hName,
+		HistogramSliceDuration: time.Duration(hDurationMin) * time.Minute,
+		OutputEndpoint:         httpReceiver,
+		SpecFolder:             specFolder,
 	})
 	log.FatalIfError(err)
 

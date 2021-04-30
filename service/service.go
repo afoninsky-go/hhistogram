@@ -17,6 +17,8 @@ import (
 type Config struct {
 	// resulting histogram name
 	HistogramName string
+	// duration of one histogram
+	HistogramSliceDuration time.Duration
 	// http receiver of generated metrics
 	OutputEndpoint string
 	// folder with openapi schemas
@@ -63,7 +65,7 @@ func NewHistogramService(cfg Config) (*Service, error) {
 // convert incoming bulks of metrics into histograms
 func (s *Service) BulkHandler(w http.ResponseWriter, r *http.Request) {
 	// create bulk processor to convert stream of http events into set of histograms
-	config := processor.NewConfig().WithName(s.cfg.HistogramName)
+	config := processor.NewConfig().WithName(s.cfg.HistogramName).WithSliceDuration(s.cfg.HistogramSliceDuration)
 	bulk := processor.NewHistogramProcessor(config).WithInterceptor(s).WithLogger(s.log)
 
 	// process incoming metrics
